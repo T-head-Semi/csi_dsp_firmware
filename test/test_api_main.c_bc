@@ -1,0 +1,136 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef _XOS
+#define IDMA_APP_USE_XOS // will use inlined disable/enable int
+#endif
+#ifdef _XTOS
+#define IDMA_APP_USE_XTOS // will use inlined disable/enable int
+#endif
+
+#include "../src/include/dsp_ps_debug.h"
+#include "dsp_ps_ns.h"
+#include "ps_sched.h"
+//#include "CppUTest/CommandLineTestRunner.h"
+//#include "CppUTest/TestHarness.h"
+#include "isp_hw.h"
+#include <xtensa/hal.h>
+#include <xtensa/idma.h>
+#include "idma_if.h"
+#include "algo.h"
+
+
+
+#define FRAME_NUM 2
+#define N_BUFFER_NUM 3
+char dst_pic[FRAME_NUM][1080 * 1920*2];
+char *ref_pic=0xc1000000;
+char *isp_ry_out=0xd0000000;
+#define MAX_ENTRY 128
+uint32_t idma_tick[MAX_ENTRY];
+uint32_t isp_int_tick[MAX_ENTRY];
+int32_t idma_cnt;
+int32_t isp_int_cnt;
+int32_t bus_idle_flag;
+
+
+void print_tick()
+{
+	int i;
+	if(idma_cnt>MAX_ENTRY ||isp_int_cnt>MAX_ENTRY )
+	{
+		printf("Count overflow idma count:%d,isp_int count:%d",idma_cnt,isp_int_cnt);
+	}
+	for(i=0;i<idma_cnt;i++)
+	{
+		printf("idma(%d) cost tick:%x\n",i,idma_tick[i]);
+	}
+	for(i=0;i<isp_int_cnt-1;i++)
+	{
+		printf("isp int(%d) cost tick:%d\n",i,isp_int_tick[i+1]-isp_int_tick[i]);
+	}
+}
+#if 0
+#define TCM_SIZE  1024*64
+char temp_bufer_tcm[TCM_SIZE] __attribute__((section(".dram1.data")));
+
+int isp_kernel_dummy(struct algo_param * params)
+{
+
+    int buffer_index;
+    int line_in_entry =0;
+    uint32_t size = params->row_stride*(params->stop_row-params->start_row);
+//    for(buffer_index=0;buffer_index<2;buffer_index++)
+//    {
+        if(params->image_in[0]==0 || params->image_out[0]==0){return -1;}
+
+    	if (idma_copy_ext2ext(params->image_in[0],
+    							params->image_out[0],
+    							size, temp_bufer_tcm,TCM_SIZE) != 0) {
+            printf("idma copy error\n");
+            return -1;
+    	}
+    return 0;
+
+}
+#endif
+
+
+extern enum xrp_status ps_post_isp_config_message_handler(void* in_data,void* out_data);
+
+void test_ps_isp_algo_api()
+{
+	if (0 != ps_xrp_device_int(0)) {
+
+		fprintf(stderr, "xrp_open_device failed\n");
+		abort();
+	}
+    if(0 != init_scheduler()){
+		fprintf(stderr, "scheduler init failed\n");
+		abort();
+    }
+
+    sisp_config_par isp_data=(sisp_config_par){
+    		.id=0,
+    		.hor=1920,
+    		.ver=1080,
+    		.data_fmt=EISP_RAW12_FORMAT_ALGIN1,
+    		.line_in_entry=16,
+    		.buffer_size = 1920*2*16*2,
+    		.buffer_addr=0xb1000000,
+    		};
+
+	extern enum xrp_status ps_isp_config_message_handler(void* in_data,void* out_data);
+    ps_isp_config_message_handler(&isp_data,NULL);
+
+    spost_isp_config_par pisp_data=(spost_isp_config_par){
+    		.id=0,
+    		.hor=1920,
+    		.ver=1080,
+    		.data_fmt=EISP_RAW12_FORMAT_ALGIN1,
+    		.line_in_entry=16,
+    		.buffer_size = 1920*2*16*2,
+    		.buffer_addr=0xc0000000,
+
+    };
+
+	extern enum xrp_status ps_post_isp_config_message_handler(void* in_data,void* out_data);
+    ps_post_isp_config_message_handler(&pisp_data,NULL);
+
+	extern enum xrp_status ps_isp_algo_start(void* in_data,void* out_data);
+    ps_isp_algo_start(NULL,NULL);
+
+    ps_task_shedule();
+
+}
+
+
+int main() {
+
+	test_ps_isp_algo_api();
+
+//	print_tick();
+}
+
