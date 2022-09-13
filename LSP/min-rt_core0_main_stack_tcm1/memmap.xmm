@@ -1,0 +1,80 @@
+//  Memory map file to generate linker scripts for programs without board I/O.
+
+// Customer ID=16470; Build=0x8e648; Copyright (c) 2004-2015 Cadence Design Systems, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+//  Place stack in local RAM:
+PLACE SECTIONS(STACK) WITH_SECTION(.dram1.bss)
+// A memory map is a sequence of memory descriptions and
+// optional parameter assignments.
+//
+// Each memory description has the following format:
+//   BEGIN <name>
+//     <addr> [,<paddr>] : <mem-type> : <mem-name> : <size> [,<psize>]
+//                       : [writable] [,executable] [,device] ;
+//     <segment>*
+//   END <name>
+//
+// where each <segment> description has the following format:
+//     <seg-name> : F|C : <start-addr> - <end-addr> [ : STACK ] [ : HEAP ]
+//                : <section-name>* ;
+//
+// Each parameter assignment is a keyword/value pair in the following format:
+//   <keyword> = <value>                (no spaces in <value>)
+// or
+//   <keyword> = "<value>"              (spaces allowed in <value>)
+//
+// The following primitives are also defined:
+//   PLACE SECTIONS( <section-name>* ) { WITH_SECTION(<section-name>)
+//                                       | IN_SEGMENT(<seg-name>) }
+//
+//   NOLOAD <section-name1> [ <section-name2> ... ]
+//
+// Please refer to the Xtensa LSP Reference Manual for more details.
+//
+VECSELECT=1
+VECRESET=0x20000000
+VECBASE= 0x20000000
+
+BEGIN sram
+0x20000000: extra_mem : sram : 0x00280000 : executable, writable ;
+ sram0 : F : 0x20000000 - 0x20000fff : .DispatchVector.text .ResetVector.text .ResetHandler.literal .ResetHandler.text .DispatchHandler.literal .DispatchHandler.text;
+ sram1 : C : 0x20001000 - 0x201fffff :  HEAP : .sram.rodata .clib.rodata .rtos.rodata .rodata .sram.literal .literal .rtos.literal .clib.literal .sram.text .text .clib.text .rtos.text .clib.data .clib.percpu.data .rtos.percpu.data .rtos.data .sram.data .data __llvm_prf_names .clib.bss .clib.percpu.bss .rtos.percpu.bss .rtos.bss .sram.bss .bss .debug.bss;
+ sram2 : C : 0x20200000 - 0x2023ffff : .sram2.rodata .sram2.literal .sram2.text .sram2.data .sram2.bss;
+ sram3 : C : 0x20240000 - 0x2027ffff : .sram3.rodata .sram3.literal .sram3.text .sram3.data .sram3.bss;
+ END sram
+
+BEGIN dram0
+0xe0180000: dataRam : dram0 : 0x20000 : writable ;
+ dram0_0 : C : 0xe0180000 - 0xe019ffff :.dram0.rodata .dram0.data .dram0.bss .dram0_user.bss;
+END dram0
+
+BEGIN dram1
+0xe01a0000: dataRam : dram1 : 0x20000 : writable ;
+ dram1_0 : C : 0xe01a0000 - 0xe01bffff :STACK :.dram1.rodata .dram1.data .dram1.bss .dram1_user.bss;
+END dram1
+
+BEGIN local_sram
+0xffa00000: sysram : local_sram :   0x180000: writable ;
+  local_sram_0 : C : 0xffa00000 - 0xffb7ffff :.local_sram.bss ;
+ END local_sram
+
+RESERVE_SEGMENT_AREA = ".dram0.data 120832 + 0 end : .dram1.data 120832 + 0 end : .sram2.data 262144 + 0 end : .sram3.data 262144 + 0 end"

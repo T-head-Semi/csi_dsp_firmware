@@ -1,0 +1,384 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifdef _XOS
+#define IDMA_APP_USE_XOS // will use inlined disable/enable int
+#endif
+#ifdef _XTOS
+#define IDMA_APP_USE_XTOS // will use inlined disable/enable int
+#endif
+
+#include "../src/driver/isp/isp_hw.h"
+#include "../src/driver/isp/post_isp_hw.h"
+#include "../src/include/isp_api.h"
+#include "CppUTest/CommandLineTestRunner.h"
+#include "CppUTest/TestHarness.h"
+#include "isp_hw.h"
+#include <xtensa/hal.h>
+#include <xtensa/idma.h>
+
+// Define this to enable the wide address API.
+#define IDMA_USE_WIDE_ADDRESS_COMPILE 1
+// Define this to enable the large Description  API.
+#define IDMA_USE_64B_DESC 1
+#define IDMA_DEBUG 1
+IDMA_BUFFER_DEFINE(task_copy, 2, IDMA_64B_DESC);
+// IDMA_BUFFER_DEFINE(task_write, 1, IDMA_64B_DESC);
+#define TCM_SIZE (128 * 1024)
+#define HOR_RES 4096
+#define VER_RES 3192
+
+#define SIZE_PER_PEX_BIT 8
+
+#define LINE_SIZE ((HOR_RES * SIZE_PER_PEX_BIT + 7) / 8)
+
+#define N_LINE 16
+char temp_bufer_tcm[TCM_SIZE] __attribute__((section(".dram1.data")));
+#define MAX_ENTRY 256
+uint32_t post_isp_tick[MAX_ENTRY];
+uint32_t isp_int_tick[MAX_ENTRY];
+int32_t post_isp_cnt;
+int32_t isp_int_cnt;
+//char source_pic[FRAME_NUM][VER_RES * LINE_SIZE];
+
+int32_t bus_idle_flag;
+
+
+int idma_copy(uint64_t src_addr, uint64_t dst_addr, uint32_t block_size,
+              idma_callback_fn cb) {
+    // Construct wide pointers for the 3 buffers. Note that the addresses for
+    // the two buffers in local memory must not have any of the high bits set or
+    // else they'll look like sysmem addresses.
+
+    int loop;
+    int fragment_size = block_size % TCM_SIZE;
+    int loop_num = block_size / TCM_SIZE;
+    int ret = 0;
+    int size = TCM_SIZE;
+    loop_num = fragment_size ? loop_num + 1 : loop_num;
+    uint32_t frame_counter = 0;
+
+    // idma_log_handler(idmaLogHander);
+    idma_init(0, MAX_BLOCK_2, 16, TICK_CYCLES_8, 100000, NULL);
+    for (loop = 0; loop < loop_num; loop++) {
+
+        uint64_t dst1_wide =
+            ((uint64_t)0xffffffff) & ((uint64_t)&temp_bufer_tcm[0]);
+        uint64_t src1_wide = src_addr + size * loop;
+        uint64_t dst2_wide = dst_addr + size * loop;
+        if (loop == (loop_num - 1) && fragment_size) {
+            size = fragment_size;
+        }
+
+        idma_init_task(task_copy, IDMA_64B_DESC, 2, cb, task_copy);
+
+        idma_add_desc64_wide(task_copy, &dst1_wide, &src1_wide, size, 0);
+        idma_add_desc64_wide(task_copy, &dst2_wide, &dst1_wide, size,
+                             DESC_NOTIFY_W_INT);
+
+        ret = idma_schedule_task(task_copy);
+        if (ret != IDMA_OK) {
+            printf("FAILED to schedule taskh: %d\n", ret);
+            return -1;
+        }
+        idma_hw_wait_all();
+
+        //  ret |= compareBuffers_task(task_sram, dst2, src1, size);
+        //	 printf("total tick:%d",total);
+        //	 printf("Go through SRAM (0x%llx,0x%llx)\n",(long
+        // long)dst1_wide,(long
+        // long )dst1_wide+size);   ?? long long print not work
+    }
+    return 0;
+}
+
+
+
+int compare(char *src, char *dst, uint32_t size) {
+    int i;
+    for (i = 0; i < size; i++) {
+        if (src[i] != dst[i]) {
+            printf("Compare fail,expect:%d,actrul:%d,at:%d\n", src[i], dst[i],
+                   i);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+#define FRAME_NUM 2
+#define N_BUFFER_NUM 2
+char dst_pic[FRAME_NUM][VER_RES * LINE_SIZE];
+// __attribute__((section(".sram.data")));
+
+char source_pic[FRAME_NUM][VER_RES * LINE_SIZE];
+char frame_buffer[N_BUFFER_NUM][LINE_SIZE * N_LINE];
+
+TEST_GROUP(IspTest){
+
+    void setup(){int ind1, ind2;
+for (ind1 = 0; ind1 < FRAME_NUM; ind1++) {
+    for (ind2 = 0; ind2 < VER_RES; ind2++) {
+        source_pic[ind1][LINE_SIZE * ind2] = (char)(ind2 % 256);
+        source_pic[ind1][LINE_SIZE * (ind2 + 1) - 1] = (char)(ind2 % 256);
+        dst_pic[ind1][LINE_SIZE * ind2] = (char)((ind2 + 1) % 256);
+        dst_pic[ind1][LINE_SIZE * (ind2 + 1) - 1] = (char)((ind2 + 1) % 256);
+    }
+}
+}
+
+void teardown() {}
+}
+;
+
+//TEST(IspTest, IspBasicFullFrameBuffer) {
+//    uint32_t frame_counter = 0;
+//    uint32_t line_counter=0;
+//    uint64_t frame_buffer_addr = (uint64_t)&dst_pic[frame_counter];
+//    int ret = 0;
+//    Sisp_buffer buffer_list[2];
+//
+//    idma_cnt =0;
+//    isp_initialize(0);
+//    isp_handler_config(HOR_RES, VER_RES, EISP_RAW8_FORMAT, N_LINE,
+//                       (uint64_t)source_pic, LINE_SIZE * N_LINE*2);
+//    *(unsigned int*)ISP_N_COUNTER_REG =0;
+//    while (frame_counter < 1) {
+//        if (isp_check_exeptional() == EISP_ERROR_OVER_FLOW) {
+//            printf("Err ISP input is overflow\n");
+//            break;
+//        }
+//
+//        if (isp_get_next_entry(buffer_list) != EISP_BOOL_TRUE) {
+//        	if((*(unsigned int*)ISP_N_COUNTER_REG + N_LINE) > VER_RES){
+//        		*(unsigned int*)ISP_N_COUNTER_REG = VER_RES;
+//        	}
+//        	else
+//        	{
+//            	*(unsigned int*)ISP_N_COUNTER_REG= *(unsigned int*)ISP_N_COUNTER_REG+N_LINE;
+//        	}
+//
+//        	*(unsigned int*)ISP_N_INTERRUPT_STATUS_REG = 0x8;
+//            isp_interrupt_handler(NULL);
+//            continue;
+//        }
+//        int buffer_index;
+//        for(buffer_index=0;buffer_index<2;buffer_index++)
+//        {
+//	        if(buffer_list[buffer_index].size==0){
+//	        	continue;
+//	        }
+//        	if (idma_copy(buffer_list[buffer_index].start_addr,
+//                          frame_buffer_addr + get_n_counter() * isp_get_line_size(),
+//                          buffer_list[buffer_index].size, NULL) != 0) {
+//	            printf("idma copy error\n");
+//	            ret = -1;
+//	            break;
+//	        }
+//
+//	        if (isp_check_exeptional() == EISP_ERROR_OVER_FLOW) {
+//                printf("%s:line:%d,Err ISP input is overflow\n",__FUNCTION__,__LINE__);
+//                ret = -1;
+//                break;
+//            }
+//
+//	        if (isp_is_last_entry_pop_in_frame() == EISP_BOOL_TRUE) {
+//	            frame_counter++;
+//	            *(unsigned int*)ISP_N_COUNTER_REG =0;
+//	            frame_buffer_addr = (uint64_t)&dst_pic[frame_counter][0];
+//	        }
+//    		if (isp_pop_n_line(buffer_list[buffer_index].line_num) != EISP_BOOL_TRUE) {
+//    			printf("pop fail\n");
+//    			ret = -1;
+//    			break;
+//    		}
+//	    }
+//
+//    }
+//    CHECK_EQUAL_ZERO(ret);
+//    ret = compare((char *)dst_pic, (char *)source_pic, LINE_SIZE * VER_RES);
+//    print_tick();
+//    CHECK_EQUAL_ZERO(ret);
+//    // MEMCMP_EQUAL(dst_pic, source_pic, 128 *2);
+//}
+
+//TEST(IspTest, IspBasicTwoBlockFrameBuffer) {
+//    uint32_t frame_counter = 0;
+//    uint64_t dst_buffer_addr = (uint64_t)&dst_pic[frame_counter];
+//    uint64_t src_buffer_addr = (uint64_t)&source_pic[frame_counter];
+//    int ret = 0;
+//    int N_counter = 0;
+//    int index = 0;
+//    Sisp_buffer buffer_list[2];
+//    isp_initialize(0);
+//    isp_handler_config(HOR_RES, VER_RES, EISP_RAW8_FORMAT, N_LINE,
+//                       (uint64_t)frame_buffer,
+//                       LINE_SIZE * N_LINE * N_BUFFER_NUM);
+//    while (frame_counter < FRAME_NUM) {
+//        if (isp_check_exeptional() == EISP_ERROR_OVER_FLOW) {
+//            printf("Err ISP input is overflow\n");
+//            break;
+//        }
+//
+//        uint64_t block_addr = 0;
+//        uint32_t block_size = 0;
+//        if (isp_get_next_n_line(&block_addr, &block_size) != EISP_BOOL_TRUE) {
+//
+//
+//        	if((*(unsigned int*)ISP_N_COUNTER_REG + N_LINE) > VER_RES){
+//        		*(unsigned int*)ISP_N_COUNTER_REG = VER_RES;
+//        	}
+//        	else
+//        	{
+//            	*(unsigned int*)ISP_N_COUNTER_REG= *(unsigned int*)ISP_N_COUNTER_REG+N_LINE;
+//        	}
+//
+//
+//
+//        	/*****************ISP behavious *********************************/
+//
+//            if (idma_copy(src_buffer_addr + N_counter * LINE_SIZE,
+//                          (uint64_t)frame_buffer[index % N_BUFFER_NUM],
+//                          LINE_SIZE * N_LINE, isp_interrupt_handler) != 0) {
+//                printf("idma copy error\n");
+//                ret = -1;
+//                break;
+//            }
+//            N_counter += N_LINE;
+//            index++;
+//
+//            /***********************************************/
+//        	*(unsigned int*)ISP_N_INTERRUPT_STATUS_REG = 0x8;
+//            isp_interrupt_handler(NULL);
+//            continue;
+//        }
+//
+//        int buffer_index;
+//        for(buffer_index=0;buffer_index<2;buffer_index++)
+//        {
+//	        if(buffer_list[buffer_index].size==0){
+//	        	continue;
+//	        }
+//
+//        }
+//
+//    	if (idma_copy(buffer_list[buffer_index].start_addr,
+//    			dst_buffer_addr + get_n_counter() * isp_get_line_size(),
+//                      buffer_list[buffer_index].size, NULL) != 0) {
+//            printf("idma copy error\n");
+//            ret = -1;
+//            break;
+//        }
+//
+//        if (isp_check_exeptional() == EISP_ERROR_OVER_FLOW) {
+//            printf("%s:line:%d,Err ISP input is overflow\n",__FUNCTION__,__LINE__);
+//            ret = -1;
+//            break;
+//        }
+//
+//        if (isp_is_last_entry_pop_in_frame() == EISP_BOOL_TRUE) {
+//            frame_counter++;
+//            *(unsigned int*)ISP_N_COUNTER_REG =0;
+//            frame_buffer_addr = (uint64_t)&dst_pic[frame_counter][0];
+//        }
+//		if (isp_pop_n_line(buffer_list[buffer_index].line_num) != EISP_BOOL_TRUE) {
+//			printf("pop fail\n");
+//			ret = -1;
+//			break;
+//		}
+//
+//    }
+//
+//    CHECK_EQUAL_ZERO(ret);
+//    ret = compare((char *)dst_pic, (char *)source_pic,
+//                  LINE_SIZE * VER_RES * FRAME_NUM);
+//    CHECK_EQUAL_ZERO(ret);
+//}
+
+TEST(IspTest, PostIspBasicFullFrameBuffer) {
+
+    uint32_t frame_counter = 0;
+    uint64_t frame_buffer_addr = (uint64_t)&dst_pic[frame_counter];
+    int ret = 0;
+    Sisp_buffer buffer_list[2];
+    post_isp_initialize(0);
+    post_isp_handler_config(HOR_RES, VER_RES, EISP_RAW8_FORMAT, N_LINE,
+                            (uint64_t)source_pic, LINE_SIZE * VER_RES);
+    while (frame_counter < 1) {
+
+}
+    CHECK_EQUAL_ZERO(ret);
+    ret = compare((char *)dst_pic, (char *)source_pic, LINE_SIZE * VER_RES);
+    CHECK_EQUAL_ZERO(ret);
+    //    MEMCMP_EQUAL(dst_pic, source_pic, VER_RES * LINE_SIZE);
+}
+
+//TEST(IspTest, PostIspBasicTwoBlockFrameBuffer) {
+//
+//    uint32_t frame_counter = 0;
+//    uint64_t dst_buffer_addr = (uint64_t)&dst_pic[frame_counter];
+//    uint64_t src_buffer_addr = (uint64_t)&source_pic[frame_counter];
+//    int ret = 0;
+//    int M_counter = 0;
+//    post_isp_initialize(0);
+//    post_isp_handler_config(HOR_RES, VER_RES, SIZE_PER_PEX_BIT, N_LINE,
+//                            (uint64_t)frame_buffer,
+//                            LINE_SIZE * N_LINE * N_BUFFER_NUM);
+//    while (frame_counter < FRAME_NUM) {
+//        uint64_t block_addr = 0;
+//        uint32_t block_size = 0;
+//        if (post_isp_get_next_m_line(&block_addr, &block_size) != EISP_OK) {
+//            ret = -1;
+//            break;
+//        }
+//        if (get_m_counter() < 0) {
+//            break;
+//        }
+//
+//        if (idma_copy(src_buffer_addr +
+//                          post_isp_get_line_size() * get_m_counter(),
+//                      block_addr, block_size, NULL) != 0) {
+//            printf("idma copy error");
+//            ret = -1;
+//            break;
+//        }
+//
+//        if (post_isp_check_exeptional() == EISP_ERROR_OVER_FLOW) {
+//            printf("Err Post ISP input is overflow");
+//            ret = -1;
+//            break;
+//        }
+//
+//        if (post_isp_is_last_block_in_frame() == EISP_BOOL_TRUE) {
+//            frame_counter++;
+//
+//            src_buffer_addr = (uint64_t)&source_pic[frame_counter][0];
+//        }
+//        //        printf("current N value:%d,src:%x,dst:%x,size:%d\n",
+//        //        get_m_counter(),
+//        //               (uint32_t)block_addr, (uint32_t)dst_buffer_addr,
+//        //               block_size);
+//        post_isp_push_m_line();
+//
+//        /*****************post isp  behavior**************************/
+//        if (idma_copy(block_addr, dst_buffer_addr + M_counter * LINE_SIZE,
+//                      block_size, post_isp_interrupt_handler) != 0) {
+//            printf("idma copy error");
+//            ret = -1;
+//            break;
+//        }
+//        M_counter += N_LINE;
+//        if (M_counter >= VER_RES) {
+//            dst_buffer_addr = (uint64_t)&dst_pic[frame_counter][0];
+//            M_counter = 0;
+//        }
+//        /********************************************************************/
+//    }
+//    CHECK_EQUAL_ZERO(ret);
+//    ret = compare((char *)source_pic, (char *)dst_pic, LINE_SIZE * VER_RES);
+//    CHECK_EQUAL_ZERO(ret);
+//    //    MEMCMP_EQUAL(dst_pic, source_pic, VER_RES * LINE_SIZE);
+//}
+// int main(int argc, char **argv) { return RUN_ALL_TESTS(argc, argv); }

@@ -1,0 +1,10 @@
+#
+#Fri Sep 03 15:19:14 CST 2021
+com.tensilica.xide.cdtcommandlist=
+com.tensilica.xide.cdtinitfileprovided=false
+org.eclipse.cdt.launch.WORKING_DIRECTORY=
+com.tensilica.xide.cdtrunscriptafterload=false
+com.tensilica.xide.cdtinitfile=
+com.tensilica.xide.cdt.launch.attachingdo=do nothing
+org.eclipse.cdt.launch.PROGRAM_ARGUMENTS=-v
+com.tensilica.xide.cdt.launch.attachingdo.stop.at.symbol=main

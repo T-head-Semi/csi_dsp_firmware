@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<BuildTarget tool="xtensa" version="1.0">
+    <BuildSettings>
+        <BaseSettings path="project">
+            <PreprocessorOptions>
+                <StringListMapOptions>
+                    <StringListMapEntry>
+                        <key>Includes</key>
+                        <value flag="-I" inheritance="prepend">
+                            <ListEntry>${workspace_loc:CSI_DSP_FW/src/include}</ListEntry>
+                            <ListEntry>${workspace_loc:CSI_DSP_FW/test/include}</ListEntry>
+                            <ListEntry>${workspace_loc:CSI_DSP_FW/src/xrp-dsp/xrp-common}</ListEntry>
+                            <ListEntry>${workspace_loc:CSI_DSP_FW/src/driver/common}</ListEntry>
+                            <ListEntry>${workspace_loc:CSI_DSP_FW/src/algo}</ListEntry>
+                        </value>
+                    </StringListMapEntry>
+                    <StringListMapEntry>
+                        <key>UnDefines</key>
+                        <value flag="-U" inheritance="prepend">
+                            <ListEntry>DSP_IP_TEST</ListEntry>
+                            <ListEntry>TEST_RESULT_TO_BUFFER</ListEntry>
+                            <ListEntry>DSP_TEST</ListEntry>
+                            <ListEntry>DSP_PROFILE_ENBALE</ListEntry>
+                        </value>
+                    </StringListMapEntry>
+                </StringListMapOptions>
+                <KeyValueListMapOptions>
+                    <KeyValueListMapEntry>
+                        <key>Defines</key>
+                        <value flag="-D" inheritance="append">
+                            <ListEntry key="__FILENAME__" value="&quot;$(subst $(dir $&lt;),,$&lt;)&quot;"/>
+                            <ListEntry key="DSP_IP_TEST" value=""/>
+                            <ListEntry key="TEST_RESULT_TO_BUFFER" value=""/>
+                            <ListEntry key="DEBUG" value=""/>
+                            <ListEntry key="DSP_TEST" value=""/>
+                            <ListEntry key="_USE_TCM_ALLOCATE" value=""/>
+                            <ListEntry key="DSP_PROFILE_ENBALE" value=""/>
+                            <ListEntry key="USE_PI_OBJ" value=""/>
+                            <ListEntry key="LOAD_LIB_OTF" value=""/>
+                        </value>
+                    </KeyValueListMapEntry>
+                </KeyValueListMapOptions>
+            </PreprocessorOptions>
+            <CompilerOptions>
+                <SingleFlagMapOptions>
+                    <SingleFlagMapEntry>
+                        <key>EnableSIMD</key>
+                        <value flag="-LNO:simd" use="true"/>
+                    </SingleFlagMapEntry>
+                    <SingleFlagMapEntry>
+                        <key>CompilerVariant</key>
+                        <value flag="xt-clang" use="true"/>
+                    </SingleFlagMapEntry>
+                </SingleFlagMapOptions>
+                <FlagValueMapOptions>
+                    <FlagValueMapEntry>
+                        <key>Optimization</key>
+                        <value level="3" flag="-O" use="true"/>
+                    </FlagValueMapEntry>
+                    <FlagValueMapEntry>
+                        <key>Debug</key>
+                        <value level="-3" flag="-g" use="true"/>
+                    </FlagValueMapEntry>
+                </FlagValueMapOptions>
+            </CompilerOptions>
+            <LinkerOptions>
+                <BooleanMapOptions>
+                    <BooleanMapEntry>
+                        <key>CreateMinsize</key>
+                        <value selected="true"/>
+                    </BooleanMapEntry>
+                    <BooleanMapEntry>
+                        <key>GenerateMapFile</key>
+                        <value selected="true"/>
+                    </BooleanMapEntry>
+                </BooleanMapOptions>
+                <StringListMapOptions>
+                    <StringListMapEntry>
+                        <key>LibrarySearchPath</key>
+                        <value flag="-L" inheritance="prepend">
+                            <ListEntry>${workspace_loc:CSI_DSP_FW/test/lib}</ListEntry>
+                        </value>
+                    </StringListMapEntry>
+                    <StringListMapEntry>
+                        <key>Libraries</key>
+                        <value flag="-l" inheritance="prepend">
+                            <ListEntry>idma</ListEntry>
+                            <ListEntry>idma-debug</ListEntry>
+                            <ListEntry>idma-debug-os</ListEntry>
+                            <ListEntry>idma-debug-xtos</ListEntry>
+                            <ListEntry>idma-os</ListEntry>
+                            <ListEntry>idma-xtos</ListEntry>
+                            <ListEntry>xtutil</ListEntry>
+                            <ListEntry>CppUTest</ListEntry>
+                            <ListEntry>CppUTestExt</ListEntry>
+                            <ListEntry>loader</ListEntry>
+                        </value>
+                    </StringListMapEntry>
+                </StringListMapOptions>
+                <LinkerSupport custom="true" key="-mlsp=" value="D:\workspace\Code\csi_dsp_firmware\LSP\min-rt_core0_stack_tcm1"/>
+            </LinkerOptions>
+        </BaseSettings>
+    </BuildSettings>
+</BuildTarget>
